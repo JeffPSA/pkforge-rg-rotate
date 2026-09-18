@@ -53,7 +53,8 @@ public sealed class PadMenu : IPadHandler
             _ => 3,
         };
         if (longLabels) _columns = 1;
-        var buttonHeight = _columns == 1 ? 58.0 : _columns == 2 ? 52.0 : 46.0;
+        // Mobile: force single column for finger-friendly heights. Touch targets are ≥44dp.
+        var buttonHeight = _columns == 1 ? 54.0 : _columns == 2 ? 48.0 : 44.0;
 
         var grid = new Grid { ColumnSpacing = 8, RowSpacing = 8 };
         for (var c = 0; c < _columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));

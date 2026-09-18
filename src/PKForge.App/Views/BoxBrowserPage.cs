@@ -3221,7 +3221,8 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
         foreach (var button in new[] { legalize, makeMine, showdown, exportPk, qr, met, moveDetails, moveShop, potential, cosmetics, awards })
         {
             button.FontSize = 11;
-            button.Padding = new Thickness(10, 6);
+            button.Padding = new Thickness(14, 8);
+            button.HeightRequest = 44;
             button.Margin = new Thickness(0, 0, 6, 6);
             monActions.Children.Add(button);
         }
@@ -3634,8 +3635,8 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
         value.SetBinding(Label.TextProperty, vmProperty);
 
         var edit = Kit.Capsule("EDIT", UiTokens.Blue);
-        edit.FontSize = 10;
-        edit.Padding = new Thickness(10, 4);
+        edit.FontSize = 11;
+        edit.Padding = new Thickness(14, 8);
         edit.Clicked += async (_, _) =>
         {
             var current = (GetVmString(vmProperty) ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries)

@@ -69,13 +69,14 @@ public static class StatsPopup
         var result = new TaskCompletionSource<int[]?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var entries = new Entry[6];
 
-        var grid = new Grid { ColumnSpacing = 8, RowSpacing = 6 };
-        for (var i = 0; i < 3; i++) grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
-        for (var i = 0; i < 4; i++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        // Mobile: single-column rows (caption + entry) instead of 3-column grid.
+        var grid = new Grid { ColumnSpacing = 8, RowSpacing = 4 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        for (var i = 0; i < 6; i++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
 
         for (var i = 0; i < 6; i++)
         {
-            var caption = new Label { Text = StatNames[i], TextColor = UiTokens.Indigo, FontFamily = DsChrome.PixelFont, FontSize = 11, FontAttributes = FontAttributes.Bold };
+            var caption = new Label { Text = StatNames[i], TextColor = UiTokens.Indigo, FontFamily = DsChrome.PixelFont, FontSize = 11, FontAttributes = FontAttributes.Bold, VerticalTextAlignment = TextAlignment.Center };
             entries[i] = new Entry
             {
                 Text = i < current.Count ? current[i].ToString() : "0",
@@ -84,11 +85,15 @@ public static class StatsPopup
                 FontFamily = DsChrome.PixelFont,
                 TextColor = UiTokens.Ink0,
                 BackgroundColor = UiTokens.ShellPress,
+                HeightRequest = 40,
+                Margin = new Thickness(0, 0, 0, 2),
             };
-            var row = (i / 3) * 2;
-            var col = i % 3;
-            grid.Add(caption); Grid.SetRow(caption, row); Grid.SetColumn(caption, col);
-            grid.Add(entries[i]); Grid.SetRow(entries[i], row + 1); Grid.SetColumn(entries[i], col);
+            var row = new Grid { ColumnSpacing = 8, ColumnDefinitions = [new(new GridLength(30)), new(GridLength.Star)] };
+            row.Children.Add(caption);
+            row.Children.Add(entries[i]);
+            Grid.SetColumn(entries[i], 1);
+            grid.Add(row);
+            Grid.SetRow(row, i);
         }
 
         Grid overlay = null!;
@@ -129,7 +134,7 @@ public static class StatsPopup
             },
         };
 
-        var window = Kit.OverlayWindow(host, content, preferredMaxWidth: 420);
+        var window = Kit.OverlayWindow(host, content, preferredMaxWidth: 560);
         overlay = Kit.AttachOverlay(host, window, () => Close(null));
         pad = new PadOverlay(() => Close(null), Apply);
         return result.Task;

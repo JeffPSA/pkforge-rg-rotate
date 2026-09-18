@@ -23,7 +23,7 @@ public sealed class DsFolderButton : Grid
 
     public Action? Tapped { get; set; }
 
-    public DsFolderButton(PadOption option, double height = 50)
+    public DsFolderButton(PadOption option, double height = 54)
     {
         HeightRequest = height;
         ColumnDefinitions = [new(new GridLength(30)), new(new GridLength(30)), new(GridLength.Star)];

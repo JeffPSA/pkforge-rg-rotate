@@ -159,7 +159,7 @@ internal sealed class EditorMenu : IPadHandler
         for (var i = 0; i < options.Length; i++)
         {
             var captured = options[i].Label;
-            var button = new DsFolderButton(options[i], 50) { Tapped = () => Close(captured) };
+            var button = new DsFolderButton(options[i], 54) { Tapped = () => Close(captured) };
             _optionViews.Add(button);
             grid.Add(button);
             Grid.SetRow(button, i);

@@ -140,7 +140,7 @@ public sealed class PickerMenu : IPadHandler
         var row = new Grid
         {
             ColumnSpacing = 10,
-            Padding = new Thickness(10, 7),
+            Padding = new Thickness(12, 10),
             ColumnDefinitions = [new(GridLength.Auto), new(GridLength.Star)],
             Children = { icon, name },
         };
@@ -152,6 +152,7 @@ public sealed class PickerMenu : IPadHandler
             StrokeThickness = 1.5,
             Stroke = Colors.Transparent,
             StrokeShape = new RoundRectangle { CornerRadius = 8 },
+            MinimumHeightRequest = 44,
             Content = row,
         };
         VisualStateManager.SetVisualStateGroups(cell, new VisualStateGroupList

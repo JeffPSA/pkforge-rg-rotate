@@ -11,47 +11,71 @@ Touch-first, single-screen, tabbed UI. All core save-edit + bank functionality p
 - **Visual**: Keep pixel aesthetic, recompose layout only
 - **Engine layer**: Untouched — Domain/Engine/AutoMod/Infrastructure reused as-is
 
-## Milestones
-
-### M1: Orientation + Fork Setup — IN PROGRESS
-- [x] Clone repo
-- [ ] Rename project (PKForge → PKForge.Mobile / "PKForge Mobile")
-- [ ] Change orientation: SensorLandscape → SensorPortrait
-- [ ] Update app ID, name, icons
-- [ ] Set up build pipeline (no .NET SDK locally)
-- [ ] Verify clean build
-
-### M2: Home Screen Recomposition
-- [ ] Vertical cartridge list (was horizontal shelf)
-- [ ] 2×2 or vertical destination cards (was 3-column)
-- [ ] Condensed footer hint bar
-
-### M3: Box Browser — Tabbed Layout
-- [ ] Tab 1: Box grid (square-optimized slot layout)
-- [ ] Tab 2: Editor (was 330px side panel)
-- [ ] Touch-friendly slot sizing (≥44dp)
-
-### M4: Editor Screens
-- [ ] Stats, moves, met origin → stacked collapsible sections
-- [ ] Larger touch targets
-
-### M5: Slide-Up Detail Panel
-- [ ] Inline summary replaces SecondScreenBoxPage
-- [ ] Tap Pokémon → slide-up panel with stats, sprite, legality
-- [ ] Gamepad D-pad navigates grid; A opens slide-up
-
-### M6: Polish
-- [ ] Font scaling verification at 720×720
-- [ ] Gamepad nav pass (D-pad + A/B/X/Y still work)
-- [ ] Full regression: open save, edit, legalize, bank, backup
-
 ## Target Device Specs
 - RG Rotate: 720×720 IPS, 290 PPI, Android 12
 - Unisoc T618, 3GB RAM
 - Physical: D-pad, face buttons, L/R, analog sticks, touch
 
-## Build
+## Milestones
+
+### M1: Orientation + Fork Setup — DONE
+- SensorLandscape → SensorPortrait
+- org.pkforge.app → org.pkforge.mobile
+- GitHub Actions CI (auto-build APK on push)
+
+### M2: Home Screen — DONE
+- Horizontal shelf → vertical scrollable list
+- 3-column cards → vertical stack
+- Full-width cartridge rows (icon left, info right)
+- Footer condensed to 2 hints
+
+### M3: Box Browser Tabbed Layout — DONE
+- 2-column (grid + 330px side panel) → single column + tab switcher
+- Tab bar: [prev] GRID | BOX 01 | EDITOR [next]
+- Touch: tap Pokémon → auto-switch to editor tab
+- Footer: 3 hints (A Select, B Back, + Menu)
+- Box manage mode hides tabs
+
+### M4: Editor Screens — DONE
+- Stats, moves, met origin editors → stacked collapsible sections
+- Larger touch targets for mobile
+
+### M5: Slide-Up Detail Panel
+- Inline summary replaces SecondScreenBoxPage
+- Tap Pokémon → slide-up panel with stats, sprite, legality
+
+### M6: Polish
+- Font scaling at 720×720
+- Touch targets ≥44dp verification
+- Gamepad nav pass
+
+## Architecture (what to touch and what to leave alone)
+
+### Safe to modify
+- `src/PKForge.App/Views/HomePage.cs` — DONE
+- `src/PKForge.App/Views/BoxBrowserPage.cs` — DONE
+- `src/PKForge.App/Views/Kit.cs` — component primitives
+- `src/PKForge.App/Views/DsKit.cs` — design chrome helpers
+
+### Modify with care (have dependencies)
+- `src/PKForge.App/MauiProgram.cs` — service registration
+- `src/PKForge.App/Views/SecondScreenBoxPage.cs` — needs replacement for M5
+
+### DO NOT MODIFY
+- `src/PKForge.Domain/` — contracts/DTOs
+- `src/PKForge.Engine/` — PKHeX adapters
+- `src/PKForge.AutoMod/` — auto legality
+- `src/PKForge.Infrastructure/` — bank, backups
+- `src/PKForge.Chrome/` — design tokens (unless mobile-specific tokens needed)
+- All editor popup files (StatsPopup.cs, MoveDetailsEditor.cs, etc.) — these are
+  already mobile-friendly as overlay popups driven by PadMenu/EditorMenu/PickerMenu,
+  which were updated for ≥44dp touch targets above.
+- BoxGridRenderer.cs, PartyView.cs
+
+## Build & Deploy
 ```bash
-git submodule update --init --recursive
-dotnet build src/PKForge.App/PKForge.App.csproj -f net10.0-android
+git clone --recurse-submodules https://github.com/JeffPSA/pkforge-rg-rotate.git
+cd pkforge-rg-rotate
+dotnet build src/PKForge.App/PKForge.App.csproj -f net10.0-android -c Debug /p:AndroidPackageFormat=apk
 ```
+CI: https://github.com/JeffPSA/pkforge-rg-rotate/actions

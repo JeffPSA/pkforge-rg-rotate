@@ -216,7 +216,7 @@ public sealed class PokedexPicker : IPadHandler
         _grid = new CollectionView
         {
             SelectionMode = SelectionMode.None,
-            ItemsLayout = new GridItemsLayout(6, ItemsLayoutOrientation.Vertical) { VerticalItemSpacing = 6, HorizontalItemSpacing = 6 },
+            ItemsLayout = new GridItemsLayout(3, ItemsLayoutOrientation.Vertical) { VerticalItemSpacing = 6, HorizontalItemSpacing = 6 },
             ItemTemplate = new DataTemplate(BuildCell),
             ItemsSource = _filtered,
         };
@@ -447,7 +447,7 @@ public sealed class PokedexPicker : IPadHandler
 
         var cell = new Border
         {
-            HeightRequest = 78,
+            HeightRequest = 90,
             BackgroundColor = UiTokens.ShellPress,
             Stroke = UiTokens.ShellEdge,
             StrokeThickness = 1.5,

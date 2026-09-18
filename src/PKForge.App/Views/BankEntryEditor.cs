@@ -256,8 +256,10 @@ public static class BankEntryEditor
             var statsPanel = Kit.DevicePanel(stats, padding: 10);
 
             // ── Quick actions: the little blue stack buttons on the summary surface.
-            var quick = new HorizontalStackLayout
+            var quick = new FlexLayout
             {
+                Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap,
+                JustifyContent = Microsoft.Maui.Layouts.FlexJustify.Start,
                 Spacing = 8,
                 Children =
                 {
@@ -278,10 +280,11 @@ public static class BankEntryEditor
             };
             _scroll.Content = surface;
 
-            var actions = new HorizontalStackLayout
+            var actions = new FlexLayout
             {
+                Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap,
+                JustifyContent = Microsoft.Maui.Layouts.FlexJustify.Center,
                 Spacing = 8,
-                HorizontalOptions = LayoutOptions.Center,
                 Children =
                 {
                     ActionButton("MOVES", EditMovesAsync),
@@ -364,6 +367,7 @@ public static class BankEntryEditor
             button.FontFamily = Font;
             button.FontSize = 12;
             button.WidthRequest = 86;
+            button.HeightRequest = 44;
             var frame = new FocusFrame(button);
             button.Clicked += (_, _) => RunFrom(frame, activate);
             _slots.Add((frame, frame, false, activate));
@@ -779,8 +783,8 @@ public static class BankEntryEditor
 
             public SummaryRow(string caption, string? icon)
             {
-                HeightRequest = 36;
-                ColumnDefinitions = [new(new GridLength(26)), new(new GridLength(26)), new(new GridLength(104)), new(GridLength.Star)];
+                HeightRequest = 44;
+                ColumnDefinitions = [new(new GridLength(26)), new(new GridLength(26)), new(new GridLength(80)), new(GridLength.Star)];
                 _bg = new SKCanvasView { InputTransparent = true };
                 _bg.PaintSurface += (_, args) => DsFolderButton.DrawRow(args.Surface.Canvas, args.Info, _selected);
                 _icon = new Image
@@ -795,7 +799,7 @@ public static class BankEntryEditor
                 {
                     Text = caption,
                     FontFamily = Font,
-                    FontSize = 14,
+                    FontSize = 13,
                     TextColor = UiTokens.Ink0,
                     VerticalTextAlignment = TextAlignment.Center,
                     LineBreakMode = LineBreakMode.TailTruncation,
@@ -803,7 +807,7 @@ public static class BankEntryEditor
                 _value = new Label
                 {
                     FontFamily = Font,
-                    FontSize = 13,
+                    FontSize = 12,
                     TextColor = UiTokens.Ink1,
                     VerticalTextAlignment = TextAlignment.Center,
                     HorizontalTextAlignment = TextAlignment.End,

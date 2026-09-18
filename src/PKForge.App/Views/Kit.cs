@@ -223,6 +223,7 @@ public static class Kit
             FontSize = 13,
             CornerRadius = 6,
             Padding = new Thickness(14, 8),
+            HeightRequest = 44,
         };
         if (primary) button.Shadow = FloatShadow;
         return button;
@@ -241,7 +242,7 @@ public static class Kit
         FontSize = 14,
         CornerRadius = 5,
         WidthRequest = 44,
-        HeightRequest = 36,
+        HeightRequest = 44,
         Padding = 0,
     };
 
