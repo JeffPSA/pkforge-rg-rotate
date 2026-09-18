@@ -49,6 +49,7 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
     private Border _screenPanel = null!;
     private Grid _editorContent = null!;
     private Label _tabBoxName = null!;
+    private SecondScreenBoxPage? _secondScreenPanel;
 
     /// <summary>The party cursor breathes: a light repaint loop that only runs on the party view.</summary>
     private void EnsurePartyPulse()
@@ -212,6 +213,18 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
         Grid.SetRow(_footerHost, 3);
 
         _hostGrid = new Grid { Children = { root } };
+
+        // Second screen panel: slide-up detail panel overlaid on the grid.
+        _secondScreenPanel = new SecondScreenBoxPage(viewModel, sprites, _hostGrid, onEdit: () =>
+        {
+            // Switch to the editor tab when EDIT is tapped.
+            _activeTab = 1;
+            StyleTabs();
+            SwitchTab();
+        });
+        _hostGrid.Children.Add(_secondScreenPanel);
+        Grid.SetRowSpan(_secondScreenPanel, Math.Max(1, _hostGrid.RowDefinitions.Count));
+
         Content = _hostGrid;
 
         viewModel.PropertyChanged += (_, args) =>
@@ -330,7 +343,16 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
         _screenPanel.IsVisible = !showEditor;
         _boxBar.IsVisible = !showEditor && !_boxManageMode;
         _editorContent.IsVisible = showEditor;
-        if (showEditor) SetEditorFooter(); else SetStorageFooter();
+        if (showEditor)
+        {
+            // Hide the slide-up panel when switching to the editor.
+            _secondScreenPanel?.ForceHide();
+            SetEditorFooter();
+        }
+        else
+        {
+            SetStorageFooter();
+        }
     }
 
     /// <summary>Repaints the tab buttons to reflect the active tab (MenuBlue = active, MenuBlueDeep = inactive).</summary>
@@ -581,6 +603,7 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
         _boxNeighbors.HeightRequest = 100;
         _gridTab.IsVisible = false;
         _editorTab.IsVisible = false;
+        _secondScreenPanel?.ForceHide();
         SetBoxManageFooter();
         if (_boxManagePulseTimer is null)
         {
@@ -2981,15 +3004,10 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
         }
     }
 
-    /// <summary>The Thor's second screen mirrors the box automatically while this page is open.</summary>
     protected override void OnAppearing()
     {
         base.OnAppearing();
         IPlatformApplication.Current?.Services.GetService<GamepadRouter>()?.Push(this);
-        var host = IPlatformApplication.Current?.Services.GetService<ISecondaryDisplayHost>();
-        if (host?.IsAvailable != true) return;
-        try { _ = host.ShowAsync(); }
-        catch { /* single-screen devices and flaky displays must never break the box */ }
     }
 
     protected override void OnDisappearing()
@@ -2997,6 +3015,7 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
         if (_boxManageMode) ExitBoxManageMode();
         base.OnDisappearing();
         IPlatformApplication.Current?.Services.GetService<GamepadRouter>()?.Remove(this);
+        _secondScreenPanel?.Cleanup();
     }
 
     private View BuildEditor()
@@ -3752,15 +3771,14 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
             _canvas.InvalidateSurface();
             return;
         }
-        // Touch: first tap selects (summary + editor), tapping the selected mon again grabs it,
-        // next tap places. Empty slot with empty hands opens the add sheet.
+        // Touch: first tap shows the slide-up summary panel, tapping the selected mon
+        // again switches to the editor. Carry/move logic unchanged.
         var wasSelected = _viewModel.SelectedSlot == slot;
         _viewModel.SelectSlot(slot);
         if (_viewModel.CarrySource is not null)
         {
             if (_viewModel.BoxIndex == -1 && slot != _viewModel.CarrySource.Value.Slot)
             {
-                // Aim with the first tap (preview), confirm with the second on the same slot.
                 if (wasSelected) _ = DropAndRepaintAsync();
                 else _canvas.InvalidateSurface();
             }
@@ -3778,7 +3796,6 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
         }
         if (_viewModel.BoxIndex == -1)
         {
-            // Same rule as the pad: a party tap opens the mon's actions, never a grab.
             _ = ShowMonActionsAsync(slot);
             return;
         }
@@ -3787,8 +3804,14 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
             _canvas.InvalidateSurface();
             return;
         }
-        // Tapping a Pokemon auto-switches to the editor tab (mobile convenience).
-        if (_viewModel.Selected is { IsEmpty: false } && _activeTab != 1)
+        // First tap: show the slide-up summary panel.
+        if (_secondScreenPanel is not null && _viewModel.Selected is { IsEmpty: false })
+        {
+            _secondScreenPanel.ResetDismiss();
+            _secondScreenPanel.Show();
+        }
+        // Tapping the selected mon a second time switches to the editor tab.
+        if (wasSelected && _viewModel.Selected is { IsEmpty: false } && _activeTab != 1)
         {
             _activeTab = 1;
             StyleTabs();

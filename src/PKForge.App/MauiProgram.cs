@@ -52,7 +52,6 @@ public static class MauiProgram
         builder.Services.AddSingleton<Platforms.Android.MusicPlayer>();
         builder.Services.AddSingleton<IMusicPlayer>(sp => sp.GetRequiredService<Platforms.Android.MusicPlayer>());
         builder.Services.AddSingleton<IDocumentPicker, AndroidDocumentPicker>();
-        builder.Services.AddSingleton<ISecondaryDisplayHost, AndroidSecondaryDisplayHost>();
         builder.Services.AddSingleton<IFolderPicker, AndroidFolderPicker>();
         builder.Services.AddSingleton<IEmulatorDetectionService, AndroidEmulatorScanner>();
 #endif
@@ -64,7 +63,6 @@ public static class MauiProgram
         builder.Services.AddTransient<BackupHistoryPage>();
         builder.Services.AddSingleton<SavePickerViewModel>();
         builder.Services.AddTransient<HomePage>();
-        builder.Services.AddTransient<SecondScreenBoxPage>();
         builder.Services.AddTransient<BankPage>();
         App.Trace("builder.Build()");
         return builder.Build();

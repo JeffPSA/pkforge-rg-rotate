@@ -24,18 +24,13 @@ public sealed class MainActivity : MauiAppCompatActivity
         StopHatRepeat();
         StopKeyRepeat();
         _hatDirection = null;
-        SecondaryDisplayHost()?.SuspendForActivityPause();
         base.OnPause();
     }
 
     protected override void OnResume()
     {
         base.OnResume();
-        SecondaryDisplayHost()?.ResumeAfterActivityPause();
     }
-
-    private static AndroidSecondaryDisplayHost? SecondaryDisplayHost() =>
-        IPlatformApplication.Current?.Services.GetService<ISecondaryDisplayHost>() as AndroidSecondaryDisplayHost;
 
     /// <summary>Console apps are fullscreen: hide status/navigation bars (swipe reveals them transiently).</summary>
     public override void OnWindowFocusChanged(bool hasFocus)
@@ -207,95 +202,6 @@ public sealed class MainActivity : MauiAppCompatActivity
 }
 
 /// <summary>
-/// Renders the second-screen box mirror via DisplayManager + Presentation.
-/// The AYN Thor does NOT tag its bottom screen as a presentation-category display,
-/// so detection falls back to GetDisplays()[1] when the category query is empty.
+/// (Removed) AndroidPresentation-based second display host.
+/// The RG Rotate is single-screen; SecondScreenBoxPage is now a slide-up overlay panel.
 /// </summary>
-public sealed class AndroidSecondaryDisplayHost(IServiceProvider services) : ISecondaryDisplayHost
-{
-    private PagePresentation? _presentation;
-    private Views.SecondScreenBoxPage? _page;
-    private bool _resumeAfterActivityPause;
-
-    public bool IsAvailable => ResolveDisplay() is not null;
-
-    public ValueTask ShowAsync(CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var display = ResolveDisplay() ?? throw new InvalidOperationException("No secondary display is available.");
-        var activity = Platform.CurrentActivity ?? throw new InvalidOperationException("No foreground Android activity is available.");
-
-        if (_presentation is { IsShowing: true })
-            return ValueTask.CompletedTask;
-
-        // A dismissed presentation (SAF picker, sleep) cannot be reshown; rebuild page + presentation.
-        _presentation?.Dismiss();
-        _page?.Cleanup();
-        _page = services.GetRequiredService<Views.SecondScreenBoxPage>();
-        _presentation = new PagePresentation(activity, display, _page, services);
-        _presentation.Show();
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask DismissAsync(CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        Dismiss();
-        _resumeAfterActivityPause = false;
-        return ValueTask.CompletedTask;
-    }
-
-    internal void SuspendForActivityPause()
-    {
-        _resumeAfterActivityPause |= _presentation?.IsShowing == true;
-        Dismiss();
-    }
-
-    internal void ResumeAfterActivityPause()
-    {
-        if (!_resumeAfterActivityPause)
-            return;
-
-        _resumeAfterActivityPause = false;
-        try { _ = ShowAsync(); }
-        catch { /* A removed or unavailable secondary display must not break resume. */ }
-    }
-
-    private void Dismiss()
-    {
-        _presentation?.Dismiss();
-        _presentation = null;
-        _page?.Cleanup();
-        _page = null;
-    }
-
-    private static Display? ResolveDisplay()
-    {
-        var manager = (DisplayManager?)Platform.AppContext.GetSystemService(Android.Content.Context.DisplayService);
-        if (manager is null) return null;
-
-        var presentation = manager.GetDisplays(DisplayManager.DisplayCategoryPresentation);
-        if (presentation is { Length: > 0 })
-            return presentation[0];
-
-        // Thor fallback: its built-in bottom screen is not presentation-tagged.
-        var all = manager.GetDisplays();
-        return all is { Length: > 1 } ? all[1] : null;
-    }
-
-    private sealed class PagePresentation(Activity activity, Display display, ContentPage page, IServiceProvider services)
-        : Presentation(activity, display)
-    {
-        protected override void OnCreate(Bundle? savedInstanceState)
-        {
-            base.OnCreate(savedInstanceState);
-            Window?.AddFlags(WindowManagerFlags.Fullscreen);
-            Window?.AddFlags(WindowManagerFlags.KeepScreenOn);
-
-            // Inflate with the Activity as context (not the Presentation's dialog context)
-            // so MAUI handlers resolve fonts/drawables registered against the Activity.
-            var mauiContext = new Microsoft.Maui.MauiContext(services, activity);
-            SetContentView(Microsoft.Maui.Platform.ElementExtensions.ToPlatform(page, mauiContext));
-        }
-    }
-}

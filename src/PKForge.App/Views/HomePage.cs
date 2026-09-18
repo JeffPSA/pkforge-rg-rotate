@@ -131,12 +131,6 @@ public sealed class HomePage : ContentPage, IPadHandler
             _scannedOnce = true;
             _viewModel.RescanCommand.Execute(null);
         }
-        var host = IPlatformApplication.Current?.Services.GetService<ISecondaryDisplayHost>();
-        if (host?.IsAvailable == true)
-        {
-            try { _ = host.ShowAsync(); }
-            catch { }
-        }
 
         // Returning from Android's install-unknown-apps screen finishes an update the
         // user already accepted with YES. No second question, no manual Check for update.

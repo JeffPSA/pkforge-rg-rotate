@@ -103,8 +103,6 @@ public sealed class BankPage : ContentPage, IPadHandler
     {
         base.OnAppearing();
         IPlatformApplication.Current?.Services.GetService<GamepadRouter>()?.Push(this);
-        var host = IPlatformApplication.Current?.Services.GetService<ISecondaryDisplayHost>();
-        if (host?.IsAvailable == true) { try { _ = host.ShowAsync(); } catch { } }
         RefreshBoxEntries();
         UpdatePreview();
     }
