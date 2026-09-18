@@ -14,11 +14,9 @@ public sealed class HomePage : ContentPage, IPadHandler
 {
     private readonly SavePickerViewModel _viewModel;
     private ScrollView _shelf = null!;
-    private HorizontalStackLayout _shelfItems = null!;
+    private VerticalStackLayout _shelfItems = null!;
     private int _shelfIndex = -1;
     private DsCard[] _cards = [];
-    private int _zone;       // 0 = game shelf, 1 = the destination cards
-    private int _cardIndex;
 
     public HomePage(SavePickerViewModel viewModel)
     {
@@ -28,25 +26,23 @@ public sealed class HomePage : ContentPage, IPadHandler
         BackgroundColor = UiTokens.Housing;
         NavigationPage.SetHasNavigationBar(this, false);
 
-        // GAMES section: the cartridge shelf (reused), labelled DS-style.
+        // GAMES section: vertical list of cartridges for square screens.
         var gamesLabel = new Label
         {
             Text = "Games", FontFamily = DsChrome.PixelFont, FontSize = 14,
             TextColor = UiTokens.Ink1,
         };
-        _shelfItems = new HorizontalStackLayout
+        _shelfItems = new VerticalStackLayout
         {
-            Spacing = 12,
-            VerticalOptions = LayoutOptions.Center,
+            Spacing = 8,
         };
         BindableLayout.SetItemsSource(_shelfItems, _viewModel.Groups);
         BindableLayout.SetItemTemplate(_shelfItems, new DataTemplate(BuildCartridgeTile));
         _shelf = new ScrollView
         {
-            Orientation = ScrollOrientation.Horizontal,
+            Orientation = ScrollOrientation.Vertical,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Never,
             VerticalScrollBarVisibility = ScrollBarVisibility.Never,
-            VerticalOptions = LayoutOptions.Center,
             Content = _shelfItems,
         };
         var shelfArea = new Grid
@@ -58,20 +54,17 @@ public sealed class HomePage : ContentPage, IPadHandler
         Grid.SetRow(_shelf, 1);
         BlockNativeFocus(_shelf);
 
-        // The three destinations as PKSM tiles with bundled pixel icons.
+        // The three destinations as PKSM tiles — stacked vertically for mobile.
         var bank = new DsCard("bank", "Bank") { Tapped = () => _ = PushAsync<BankPage>() };
         var events = new DsCard("events", "Events") { Tapped = () => _ = ShowEventsMenuAsync() };
         var settings = new DsCard("settings", "Settings") { Tapped = () => _ = ShowSettingsAsync() };
         _cards = [bank, events, settings];
         foreach (var card in _cards) BlockNativeFocus(card);
-        var cards = new Grid
+        var cards = new VerticalStackLayout
         {
-            ColumnSpacing = 10,
-            ColumnDefinitions = [new(GridLength.Star), new(GridLength.Star), new(GridLength.Star)],
+            Spacing = 8,
             Children = { bank, events, settings },
         };
-        Grid.SetColumn(events, 1);
-        Grid.SetColumn(settings, 2);
 
         var body = new Grid
         {
@@ -85,14 +78,12 @@ public sealed class HomePage : ContentPage, IPadHandler
 
         var footer = DsChrome.Footer(
             ("A", "Open", null),
-            ("Y", "Link", () => _ = ShowLinkMenuAsync()),
-            ("X", "File", () => _ = LinkFileAsync()),
             ("+", "Settings", () => _ = ShowSettingsAsync()));
 
         var root = new Grid
         {
             RowDefinitions = [new(GridLength.Auto), new(GridLength.Auto), new(GridLength.Star), new(GridLength.Auto)],
-            Children = { DsChrome.TitleBar(), DsChrome.StatusStrip("PKForge", "Offline"), bodyHost, footer },
+            Children = { DsChrome.TitleBar(), DsChrome.StatusStrip("PKForge Mobile", "Offline"), bodyHost, footer },
         };
         Grid.SetRow((View)root.Children[1], 1);
         Grid.SetRow(bodyHost, 2);
@@ -132,8 +123,7 @@ public sealed class HomePage : ContentPage, IPadHandler
     {
         base.OnAppearing();
         _isAppearing = true;
-        _zone = 0;
-        ClearCardFocus();
+
         IPlatformApplication.Current?.Services.GetService<GamepadRouter>()?.Push(this);
         // Scan once per launch; coming back from the box must not trigger a re-walk.
         if (!_scannedOnce)
@@ -217,34 +207,19 @@ public sealed class HomePage : ContentPage, IPadHandler
     {
         switch (button)
         {
-            case PadButton.Down when _zone == 0: _zone = 1; return FocusCard(0);
-            case PadButton.Up when _zone == 1: _zone = 0; ClearCardFocus(); return true;
-            case PadButton.Left: return _zone == 0 ? MoveShelf(-1) : FocusCard(_cardIndex - 1);
-            case PadButton.Right: return _zone == 0 ? MoveShelf(1) : FocusCard(_cardIndex + 1);
-            case PadButton.A:
-                if (_zone == 1) { _cards[_cardIndex].Tapped?.Invoke(); return true; }
-                return OpenShelfSelection();
+            case PadButton.Down: return MoveShelf(1);
+            case PadButton.Up: return MoveShelf(-1);
+            case PadButton.Left: return MoveShelf(-1);
+            case PadButton.Right: return MoveShelf(1);
+            case PadButton.A: return OpenShelfSelection();
             case PadButton.X: _ = LinkFileAsync(); return true;
             case PadButton.Y: _ = ShowLinkMenuAsync(); return true;
-            case PadButton.R: _ = PushAsync<BackupHistoryPage>(); return true;
             case PadButton.Start: _ = ShowSettingsAsync(); return true;
             default: return false;
         }
     }
 
-    /// <summary>Move the cursor among the Bank/Events/Settings cards (the second focus zone).</summary>
-    private bool FocusCard(int index)
-    {
-        if (_cards.Length == 0) return false;
-        _cardIndex = Math.Clamp(index, 0, _cards.Length - 1);
-        for (var i = 0; i < _cards.Length; i++) _cards[i].Selected = i == _cardIndex;
-        return true;
-    }
 
-    private void ClearCardFocus()
-    {
-        foreach (var card in _cards) card.Selected = false;
-    }
 
     private bool MoveShelf(int delta)
     {
@@ -698,130 +673,84 @@ public sealed class HomePage : ContentPage, IPadHandler
     /// </summary>
     private View BuildCartridgeTile()
     {
-        const double cartWidth = 76;
-        const double cartHeight = 84;
-
-        var contactStrip = new BoxView { HeightRequest = 9, Color = UiTokens.MaroonDeep };
-
-        var gameMark = new GameCartridgeMark();
+        // Full-width row for mobile: cartridge icon left, game info right.
+        var gameMark = new GameCartridgeMark { WidthRequest = 36, HeightRequest = 36 };
         gameMark.SetBinding(GameCartridgeMark.GenerationProperty, nameof(DetectedSave.Generation));
 
-        // Use the real game label art whenever we bundle it. The identity mark remains a
-        // deliberate, consistent fallback for homebrew, hacks, and unknown saves.
-        var gameArt = new Image
-        {
-            Aspect = Aspect.AspectFit,
-            IsVisible = false,
-            Margin = new Thickness(3),
-        };
+        var gameArt = new Image { Aspect = Aspect.AspectFit, IsVisible = false, Margin = new Thickness(2) };
         gameArt.BindingContextChanged += async (_, _) =>
         {
             if (gameArt.BindingContext is not SaveGroup group) return;
             gameArt.IsVisible = false;
             gameMark.IsVisible = true;
             var path = await GameArt.GetIconAsync(group.GameLabel);
-            // A recycled template may have moved on while package I/O was in flight.
             if (!ReferenceEquals(gameArt.BindingContext, group)) return;
             gameArt.Source = path;
             gameArt.IsVisible = path is not null;
             gameMark.IsVisible = path is null;
         };
-        var sticker = new Border
-        {
-            BackgroundColor = UiTokens.ShellPress,
-            Stroke = UiTokens.ShellEdge,
-            StrokeThickness = 1,
-            StrokeShape = new RoundRectangle { CornerRadius = 4 },
-            Margin = new Thickness(7, 5, 7, 7),
-            Content = new Grid { Children = { gameMark, gameArt } },
-        };
 
-        var cartLayout = new Grid
+        var cartIcon = new Grid
         {
-            RowDefinitions = [new(GridLength.Auto), new(GridLength.Star)],
-            Children = { contactStrip, sticker },
+            WidthRequest = 56, HeightRequest = 60,
+            Children =
+            {
+                new BoxView { Color = UiTokens.ShellPress, VerticalOptions = LayoutOptions.Fill, HorizontalOptions = LayoutOptions.Fill },
+                new Grid { Children = { gameMark, gameArt }, VerticalOptions = LayoutOptions.Center, HorizontalOptions = LayoutOptions.Center },
+            },
         };
-        Grid.SetRow(sticker, 1);
+        cartIcon.SetBinding(BackgroundColorProperty, new Binding(nameof(DetectedSave.Generation), converter: GenerationColor));
 
-        var cartBody = new Border
-        {
-            WidthRequest = cartWidth,
-            HeightRequest = cartHeight,
-            StrokeThickness = 1.5,
-            StrokeShape = new RoundRectangle { CornerRadius = 7 },
-            HorizontalOptions = LayoutOptions.Center,
-            Padding = 0,
-            Content = cartLayout,
-        };
-        cartBody.SetBinding(BackgroundColorProperty, new Binding(nameof(DetectedSave.Generation), converter: GenerationColor));
-        cartBody.SetBinding(Border.StrokeProperty, new Binding(nameof(DetectedSave.Generation), converter: GenerationEdge));
-
-        var iconHost = new Grid { Children = { cartBody } };
-
-        var name = new Label
-        {
-            TextColor = UiTokens.Ink0,
-            FontSize = 13,
-            FontAttributes = FontAttributes.Bold,
-            HorizontalTextAlignment = TextAlignment.Center,
-            LineBreakMode = LineBreakMode.TailTruncation,
-            MaximumWidthRequest = 112,
-        };
+        var name = new Label { TextColor = UiTokens.Ink0, FontSize = 14, FontAttributes = FontAttributes.Bold, VerticalTextAlignment = TextAlignment.Center };
         name.SetBinding(Label.TextProperty, nameof(DetectedSave.GameLabel));
 
-        var trainer = new Label
-        {
-            TextColor = UiTokens.Ink1,
-            FontSize = 10,
-            HorizontalTextAlignment = TextAlignment.Center,
-            LineBreakMode = LineBreakMode.TailTruncation,
-        };
+        var trainer = new Label { TextColor = UiTokens.Ink1, FontSize = 11, VerticalTextAlignment = TextAlignment.Center };
         trainer.SetBinding(Label.TextProperty, new MultiBinding
         {
-            Bindings =
-            {
-                new Binding(nameof(DetectedSave.TrainerName)),
-                new Binding(nameof(DetectedSave.PlayTime)),
-            },
+            Bindings = { new Binding(nameof(DetectedSave.TrainerName)), new Binding(nameof(DetectedSave.PlayTime)) },
             StringFormat = "{0} · {1}",
         });
 
-        // Every tile is exactly the same size: the shelf must read as a row of carts.
         var chipIcon = PksmIcons.Icon("folder", 12, PksmIcons.Dark);
-        var chipLabel = new Label { TextColor = UiTokens.OnAccent, FontSize = 9, FontAttributes = FontAttributes.Bold };
+        var chipLabel = new Label { TextColor = UiTokens.OnAccent, FontSize = 10, FontAttributes = FontAttributes.Bold };
         chipLabel.SetBinding(Label.TextProperty, new Binding(nameof(SaveGroup.Count), stringFormat: "x{0}"));
         var countChip = new Border
         {
-            BackgroundColor = UiTokens.Cyan,
-            StrokeThickness = 0,
-            StrokeShape = new RoundRectangle { CornerRadius = 4 },
-            Padding = new Thickness(6, 2),
-            HorizontalOptions = LayoutOptions.Center,
-            IsVisible = false,
+            BackgroundColor = UiTokens.Cyan, StrokeThickness = 0,
+            StrokeShape = new RoundRectangle { CornerRadius = 4 }, Padding = new Thickness(6, 2),
+            HorizontalOptions = LayoutOptions.End, IsVisible = false,
             Content = new HorizontalStackLayout { Spacing = 4, Children = { chipIcon, chipLabel } },
         };
         countChip.SetBinding(IsVisibleProperty, new Binding(nameof(SaveGroup.Count), converter: MoreThanOne));
 
-        var card = Kit.DevicePanel(new VerticalStackLayout
+        var info = new Grid
         {
-            Spacing = 4,
-            HorizontalOptions = LayoutOptions.Center,
-            VerticalOptions = LayoutOptions.Center,
-            Children = { iconHost, name, trainer, countChip },
-        }, padding: 8);
-        card.WidthRequest = 122;
-        card.HeightRequest = 138;
+            ColumnDefinitions = [new(GridLength.Star), new(GridLength.Auto)],
+            Children = { new VerticalStackLayout { Spacing = 2, VerticalOptions = LayoutOptions.Center, Children = { name, trainer } }, countChip },
+        };
+        Grid.SetColumn(countChip, 1);
+
+        var card = new Border
+        {
+            StrokeThickness = 1.5, Stroke = UiTokens.ShellEdge,
+            StrokeShape = new RoundRectangle { CornerRadius = 8 },
+            Padding = new Thickness(12, 10),
+            Content = new Grid
+            {
+                ColumnSpacing = 14,
+                ColumnDefinitions = [new(GridLength.Auto), new(GridLength.Star)],
+                Children = { cartIcon, info },
+            },
+        };
+        Grid.SetColumn(info, 1);
+        card.SetBinding(Border.BackgroundColorProperty, new Binding(nameof(SaveGroup.IsSelected), converter: new FuncConverter(sel => (bool)(sel ?? false) ? UiTokens.SelectFill : UiTokens.Shell)));
 
         card.Triggers.Add(new DataTrigger(typeof(Border))
         {
-            Binding = new Binding(nameof(SaveGroup.IsSelected)),
-            Value = true,
-            Setters =
-            {
-                new Setter { Property = Border.StrokeProperty, Value = UiTokens.SelectBorder },
-                new Setter { Property = Border.StrokeThicknessProperty, Value = 3.0 },
-            },
+            Binding = new Binding(nameof(SaveGroup.IsSelected)), Value = true,
+            Setters = { new Setter { Property = Border.StrokeProperty, Value = UiTokens.SelectBorder }, new Setter { Property = Border.StrokeThicknessProperty, Value = 2.5 } },
         });
+
         var tap = new TapGestureRecognizer();
         tap.Tapped += async (_, _) =>
         {
@@ -855,7 +784,7 @@ public sealed class HomePage : ContentPage, IPadHandler
     }
 
     private static readonly IValueConverter GenerationColor = new FuncConverter(gen => Kit.EraColor((int)(gen ?? 0)));
-    private static readonly IValueConverter GenerationEdge = new FuncConverter(gen => Kit.EraColor((int)(gen ?? 0)).AddLuminosity(-0.15f));
+
     private static readonly MoreThanOneConverter MoreThanOne = new();
 
     private sealed class FuncConverter(Func<object?, Color> convert) : IValueConverter
