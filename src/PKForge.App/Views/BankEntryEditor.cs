@@ -260,7 +260,6 @@ public static class BankEntryEditor
             {
                 Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap,
                 JustifyContent = Microsoft.Maui.Layouts.FlexJustify.Start,
-                Spacing = 8,
                 Children =
                 {
                     QuickButton(classicTraining ? "MAX DV" : "MAX IV", MaxIvsAsync),
@@ -284,7 +283,6 @@ public static class BankEntryEditor
             {
                 Wrap = Microsoft.Maui.Layouts.FlexWrap.Wrap,
                 JustifyContent = Microsoft.Maui.Layouts.FlexJustify.Center,
-                Spacing = 8,
                 Children =
                 {
                     ActionButton("MOVES", EditMovesAsync),

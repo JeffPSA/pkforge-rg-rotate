@@ -219,7 +219,7 @@ public sealed class SecondScreenBoxPage : Grid
             {
                 WidthRequest = 36,
                 HeightRequest = 4,
-                CornerRadius = 2,
+                StrokeShape = new RoundRectangle { CornerRadius = 2 },
                 BackgroundColor = UiTokens.Ink1,
                 HorizontalOptions = LayoutOptions.Center,
                 VerticalOptions = LayoutOptions.Center,
@@ -273,9 +273,6 @@ public sealed class SecondScreenBoxPage : Grid
         if (_panel is null) return;
         switch (e.StatusType)
         {
-            case GestureStatus.Starting:
-                _panel.TranslationY = 0;
-                break;
             case GestureStatus.Running:
                 var dy = Math.Max(0, e.TotalY);
                 _panel.TranslationY = dy;
@@ -285,7 +282,7 @@ public sealed class SecondScreenBoxPage : Grid
                 if (_panel.TranslationY > _panelHeight * 0.3)
                     Dismiss();
                 else
-                    _panel.TranslateTo(0, 0, 150, Easing.CubicOut);
+                    _ = _panel.TranslateToAsync(0, 0, 150, Easing.CubicOut);
                 break;
         }
     }
@@ -299,7 +296,7 @@ public sealed class SecondScreenBoxPage : Grid
         _isShowing = true;
         if (_panel is not null)
             _panel.TranslationY = 0;
-        this.TranslateTo(0, 0, 250, Easing.CubicOut);
+        this.TranslateToAsync(0, 0, 250, Easing.CubicOut);
         SetAnimating(true);
         UpdateSummary();
         _sprite.InvalidateSurface();
@@ -313,7 +310,7 @@ public sealed class SecondScreenBoxPage : Grid
         _isShowing = false;
         _userDismissed = true;
         SetAnimating(false);
-        this.TranslateTo(0, _panelHeight + 80, 200, Easing.CubicIn)
+        this.TranslateToAsync(0, _panelHeight + 80, 200, Easing.CubicIn)
             .ContinueWith(_ =>
             {
                 MainThread.BeginInvokeOnMainThread(() =>
