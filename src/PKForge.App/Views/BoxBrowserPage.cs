@@ -10,9 +10,11 @@ using SkiaSharp.Views.Maui.Controls;
 namespace PKForge.App.Views;
 
 /// <summary>
-/// The storage screen, composed like a console UI: thin status strip on top,
-/// square box grid left, info/editor panel right, button-hint bar at the bottom.
-/// Landscape-only - this app is designed for the AYN Thor, not a phone.
+/// The storage screen, recomposed for the RG Rotate (720x720 square Android):
+/// status strip on top, tab switcher (Grid / Editor), the active tab's body fills
+/// the remaining space, and a 3-hint footer at the bottom. Touch-first: tapping a
+/// slot auto-switches to the Editor tab. Gamepad: D-pad navigates, A enters editor,
+/// B returns to grid.
 /// </summary>
 public sealed class BoxBrowserPage : ContentPage, IPadHandler
 {
@@ -22,10 +24,8 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
     private readonly SKCanvasView _canvas;
     private readonly SKCanvasView _boxBar;
     private readonly SKCanvasView _boxNeighbors;
-    private readonly FrameInvalidator _frame;
+    private FrameInvalidator _frame;
     private readonly ContentView _footerHost;
-    private readonly Grid _storageContent;
-    private readonly View _sidePanel;
     private ScrollView? _editorScroll;
     private EditorFocusTarget[] EditorFocusTargets = [];
     private Grid _hostGrid = null!;
@@ -42,6 +42,13 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
     private int _slotBeforeBoxManage = -1;
     private readonly HashSet<int> _lockedSlots = [];
     private readonly HashSet<int> _markedBoxes = [];
+    private int _activeTab;
+    private Button _gridTab = null!;
+    private Button _editorTab = null!;
+    private View _idle = null!;
+    private Border _screenPanel = null!;
+    private Grid _editorContent = null!;
+    private Label _tabBoxName = null!;
 
     /// <summary>The party cursor breathes: a light repaint loop that only runs on the party view.</summary>
     private void EnsurePartyPulse()
@@ -89,13 +96,13 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
         Grid.SetRow(_boxNeighbors, 1);
         Grid.SetRow(_canvas, 2);
 
-        var screen = Kit.LcdPanel(screenBody, padding: 4);
+        _screenPanel = Kit.LcdPanel(screenBody, padding: 4);
         // The frame and its padding wear the current box wallpaper - no leftover default corners.
         void TintScreen()
         {
             var (_, frame) = BoxGridRenderer.HueFor(_viewModel.BoxIndex);
-            screen.BackgroundColor = UiTokens.Wallpaper(_viewModel.BoxIndex);
-            screen.Stroke = frame;
+            _screenPanel.BackgroundColor = UiTokens.Wallpaper(_viewModel.BoxIndex);
+            _screenPanel.Stroke = frame;
         }
         TintScreen();
         _viewModel.PropertyChanged += (_, args) =>
@@ -104,26 +111,95 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
                 TintScreen();
         };
 
-        _sidePanel = BuildSidePanel();
+        _editorScroll = new ScrollView { Content = BuildEditor(), IsVisible = false };
+        var editor = _editorScroll;
 
-        // DS chrome around the box grid + editor.
-        _storageContent = new Grid
+        // Idle card: shown when no Pokémon is selected.
+        _idle = new VerticalStackLayout
         {
-            Padding = new Thickness(12, 10),
-            ColumnSpacing = 12,
-            ColumnDefinitions = [new(GridLength.Star), new(new GridLength(330))],
-            Children = { screen, _sidePanel },
+            Spacing = 8,
+            VerticalOptions = LayoutOptions.Center,
+            HorizontalOptions = LayoutOptions.Center,
+            Children =
+            {
+                PksmIcons.Icon("storage", 44),
+                new Label { Text = "Select a Pokémon", TextColor = UiTokens.Ink1, FontFamily = DsChrome.PixelFont, FontSize = 15 },
+                new Label { Text = "Tap an empty slot to add one", TextColor = UiTokens.Ink1, FontSize = 11, HorizontalTextAlignment = TextAlignment.Center },
+            },
         };
-        Grid.SetColumn(_sidePanel, 1);
-        var bodyHost = new Grid { Children = { DsChrome.GridBackground(), _storageContent } };
+
+        void SwapPanels()
+        {
+            var hasSelection = _viewModel.Selected is { IsEmpty: false };
+            editor.IsVisible = hasSelection;
+            _idle.IsVisible = !hasSelection;
+        }
+        _viewModel.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName is nameof(BoxBrowserViewModel.Selected))
+                SwapPanels();
+        };
+        SwapPanels();
+
+        _editorContent = new Grid { Children = { _idle, editor } };
+
+        // Tab switcher: two pill buttons (Grid / Editor) styled like MiniCapsules.
+        _gridTab = new Button { Text = "GRID", FontFamily = DsChrome.PixelFont, FontSize = 13, Padding = new Thickness(18, 8) };
+        _editorTab = new Button { Text = "EDITOR", FontFamily = DsChrome.PixelFont, FontSize = 13, Padding = new Thickness(18, 8) };
+        _tabBoxName = new Label
+        {
+            Text = "BOX 01",
+            FontFamily = DsChrome.PixelFont,
+            FontSize = 13,
+            TextColor = UiTokens.Ink0,
+            HorizontalTextAlignment = TextAlignment.Center,
+            VerticalTextAlignment = TextAlignment.Center,
+        };
+        _gridTab.Clicked += (_, _) => { _activeTab = 0; StyleTabs(); SwitchTab(); };
+        _editorTab.Clicked += (_, _) => { _activeTab = 1; StyleTabs(); SwitchTab(); };
+        StyleTabs();
+        UpdateTabBoxName();
+
+        var prevBox = Kit.MiniCapsule("<", UiTokens.Ink0);
+        prevBox.Clicked += (_, _) => _viewModel.PreviousBox();
+        var nextBox = Kit.MiniCapsule(">", UiTokens.Ink0);
+        nextBox.Clicked += (_, _) => _viewModel.NextBox();
+
+        var tabBar = new Grid
+        {
+            ColumnSpacing = 6,
+            Padding = new Thickness(0, 4),
+            ColumnDefinitions =
+            [
+                new(new GridLength(44)),
+                new(new GridLength(80)),
+                new(GridLength.Star),
+                new(new GridLength(80)),
+                new(new GridLength(44)),
+            ],
+            Children = { prevBox, _gridTab, _tabBoxName, _editorTab, nextBox },
+        };
+        Grid.SetColumn(_gridTab, 1);
+        Grid.SetColumn(_tabBoxName, 2);
+        Grid.SetColumn(_editorTab, 3);
+        Grid.SetColumn(nextBox, 4);
+
+        var body = new Grid
+        {
+            RowSpacing = 6,
+            RowDefinitions = [new(GridLength.Auto), new(GridLength.Star)],
+            Children = { tabBar, _screenPanel, _editorContent },
+        };
+        Grid.SetRow(_screenPanel, 1);
+        Grid.SetRow(_editorContent, 1);
+        SwitchTab();
+
+        var bodyHost = new Grid { Children = { DsChrome.GridBackground(), body } };
 
         var title = string.IsNullOrEmpty(_viewModel.ConnectedName) ? "Storage" : _viewModel.ConnectedName;
         _footerHost = new ContentView { Content = DsChrome.Footer(
-            ("A", "Grab", null),
+            ("A", "Select", null),
             ("B", "Back", () => _ = Navigation.PopAsync()),
-            ("LR", "Box", null),
-            ("X", "Tools", () => _ = ShowToolsAsync()),
-            ("Y", "Save data", () => _ = ShowSaveDataAsync()),
             ("+", "Menu", () => OpenCursorMenu())) };
 
         var root = new Grid
@@ -237,8 +313,8 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
     }
 
     private void SetStorageFooter() => _footerHost.Content = DsChrome.Footer(
-        ("A", "Grab", null), ("B", "Back", () => _ = Navigation.PopAsync()), ("LR", "Box", null),
-        ("X", "Tools", () => _ = ShowToolsAsync()), ("Y", "Save data", () => _ = ShowSaveDataAsync()),
+        ("A", "Select", null),
+        ("B", "Back", () => _ = Navigation.PopAsync()),
         ("+", "Menu", () => OpenCursorMenu()));
 
     private void SetEditorFooter() => _footerHost.Content = DsChrome.Footer(
@@ -246,6 +322,31 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
         ("A", "Use field", () => ActivateEditorFocus()),
         ("B", "Box", ExitEditorFocusMode),
         ("+", "Box", ExitEditorFocusMode));
+
+    /// <summary>Switches between Grid and Editor tabs: toggles visibility of the box grid screen and the editor content.</summary>
+    private void SwitchTab()
+    {
+        var showEditor = _activeTab == 1;
+        _screenPanel.IsVisible = !showEditor;
+        _boxBar.IsVisible = !showEditor && !_boxManageMode;
+        _editorContent.IsVisible = showEditor;
+        if (showEditor) SetEditorFooter(); else SetStorageFooter();
+    }
+
+    /// <summary>Repaints the tab buttons to reflect the active tab (MenuBlue = active, MenuBlueDeep = inactive).</summary>
+    private void StyleTabs()
+    {
+        _gridTab.BackgroundColor = _activeTab == 0 ? UiTokens.MenuBlue : UiTokens.MenuBlueDeep;
+        _gridTab.TextColor = _activeTab == 0 ? UiTokens.OnAccent : UiTokens.Ink0;
+        _editorTab.BackgroundColor = _activeTab == 1 ? UiTokens.MenuBlue : UiTokens.MenuBlueDeep;
+        _editorTab.TextColor = _activeTab == 1 ? UiTokens.OnAccent : UiTokens.Ink0;
+    }
+
+    /// <summary>Updates the tab-bar box name label when the current box changes.</summary>
+    private void UpdateTabBoxName()
+    {
+        _tabBoxName.Text = _viewModel.BoxIndex == -1 ? "PARTY" : $"BOX {_viewModel.BoxIndex + 1:00}";
+    }
 
     private void SetBoxManageFooter() => _footerHost.Content = DsChrome.Footer(
         ("A", _boxHeld ? "Drop box" : "Hold box", () => OnPadButton(PadButton.A)),
@@ -281,72 +382,6 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
     }
 
 
-    private View BuildSidePanel()
-    {
-        // The maroon header strip carries the selected mon's name (the Gen-5 section header).
-        var header = (Border)Kit.HeaderBar("Pokémon");
-        var headerLabel = (Label)header.Content!;
-        headerLabel.SetBinding(Label.TextProperty, new Binding(nameof(BoxBrowserViewModel.Selected), converter: new MonHeaderConverter()));
-
-
-        // Box paging beside the header (the box-name bar above the grid shows the number).
-        var previous = Kit.MiniCapsule("<", UiTokens.Ink0);
-        previous.HeightRequest = 32;
-        previous.Clicked += (_, _) => _viewModel.PreviousBox();
-        var next = Kit.MiniCapsule(">", UiTokens.Ink0);
-        next.HeightRequest = 32;
-        next.Clicked += (_, _) => _viewModel.NextBox();
-
-        var headerRow = new Grid
-        {
-            ColumnSpacing = 8,
-            ColumnDefinitions = [new(GridLength.Star), new(GridLength.Auto), new(GridLength.Auto)],
-            Children = { header, previous, next },
-        };
-        Grid.SetColumn(previous, 1);
-        Grid.SetColumn(next, 2);
-
-        // Idle card until a Pokémon is selected; the editor replaces it.
-        var idle = new VerticalStackLayout
-        {
-            Spacing = 8,
-            VerticalOptions = LayoutOptions.Center,
-            HorizontalOptions = LayoutOptions.Center,
-            Children =
-            {
-                PksmIcons.Icon("storage", 44),
-                new Label { Text = "Select a Pokémon", TextColor = UiTokens.Ink1, FontFamily = DsChrome.PixelFont, FontSize = 15 },
-                new Label { Text = "Tap an empty slot to add one", TextColor = UiTokens.Ink1, FontSize = 11, HorizontalTextAlignment = TextAlignment.Center },
-            },
-        };
-
-        _editorScroll = new ScrollView { Content = BuildEditor(), IsVisible = false };
-        var editor = _editorScroll;
-
-        void SwapPanels()
-        {
-            var hasSelection = _viewModel.Selected is { IsEmpty: false };
-            editor.IsVisible = hasSelection;
-            idle.IsVisible = !hasSelection;
-        }
-        _viewModel.PropertyChanged += (_, args) =>
-        {
-            if (args.PropertyName is nameof(BoxBrowserViewModel.Selected))
-                SwapPanels();
-        };
-        SwapPanels();
-
-        var body = new Grid { Children = { idle, editor } };
-
-        var layout = new Grid
-        {
-            RowSpacing = 8,
-            RowDefinitions = [new(GridLength.Auto), new(GridLength.Star)],
-            Children = { headerRow, body },
-        };
-        Grid.SetRow(body, 1);
-        return Kit.DevicePanel(layout, padding: 10);
-    }
 
     private void EnterEditorFocusMode()
     {
@@ -540,12 +575,12 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
         if (_viewModel.SelectMode) _viewModel.ExitSelectMode();
         _viewModel.CancelCarry();
         _viewModel.Status = "BOX MANAGER - A HOLD · L/R BROWSE · Y SELECT · X ACTIONS";
-        _sidePanel.IsVisible = false;
-        _storageContent.ColumnDefinitions[1].Width = new GridLength(0);
-        _storageContent.ColumnSpacing = 0;
+        SwitchTab(); // ensure grid tab is active for manage mode
         _canvas.EnableTouchEvents = false;
         _boxNeighbors.IsVisible = true;
         _boxNeighbors.HeightRequest = 100;
+        _gridTab.IsVisible = false;
+        _editorTab.IsVisible = false;
         SetBoxManageFooter();
         if (_boxManagePulseTimer is null)
         {
@@ -573,9 +608,8 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
         _boxManagePulseTimer?.Stop();
         _boxNeighbors.IsVisible = false;
         _canvas.EnableTouchEvents = true;
-        _sidePanel.IsVisible = true;
-        _storageContent.ColumnDefinitions[1].Width = new GridLength(330);
-        _storageContent.ColumnSpacing = 12;
+        _gridTab.IsVisible = true;
+        _editorTab.IsVisible = true;
         _viewModel.SelectedSlot = _slotBeforeBoxManage;
         SetStorageFooter();
         _viewModel.Status = "READY";
@@ -2551,6 +2585,32 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
             }
         }
 
+        // Tab-aware pad routing: on Grid tab, A enters the editor; on Editor tab,
+        // B goes back to the grid and X/Y/Start open their overlays normally.
+        if (_activeTab == 1)
+        {
+            switch (button)
+            {
+                case PadButton.Up: return _viewModel.MoveCursor(FocusDirection.Up);
+                case PadButton.Down: return _viewModel.MoveCursor(FocusDirection.Down);
+                case PadButton.Left: return _viewModel.MoveCursor(FocusDirection.Left);
+                case PadButton.Right: return _viewModel.MoveCursor(FocusDirection.Right);
+                case PadButton.L: _viewModel.PreviousBox(); return true;
+                case PadButton.R: _viewModel.NextBox(); return true;
+                case PadButton.A:
+                    if (_viewModel.Selected is { IsEmpty: false })
+                        EnterEditorFocusMode();
+                    return true;
+                case PadButton.B:
+                    _activeTab = 0; StyleTabs(); SwitchTab();
+                    return true;
+                case PadButton.X: _ = ShowToolsAsync(); return true;
+                case PadButton.Y: _ = ShowSaveDataAsync(); return true;
+                case PadButton.Start: return OpenCursorMenu();
+                default: return false;
+            }
+        }
+
         switch (button)
         {
             case PadButton.Up: return _viewModel.MoveCursor(FocusDirection.Up);
@@ -2559,7 +2619,14 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
             case PadButton.Right: return _viewModel.MoveCursor(FocusDirection.Right);
             case PadButton.L: _viewModel.PreviousBox(); return true;
             case PadButton.R: _viewModel.NextBox(); return true;
-            case PadButton.A: return ConfirmCursor();
+            case PadButton.A:
+                if (ConfirmCursor()) return true;
+                // If a Pokemon was selected, also switch to editor tab.
+                if (_viewModel.Selected is { IsEmpty: false })
+                {
+                    _activeTab = 1; StyleTabs(); SwitchTab();
+                }
+                return true;
             case PadButton.B:
                 if (_viewModel.SelectMode) { _viewModel.ExitSelectMode(); _canvas.InvalidateSurface(); return true; }
                 if (_viewModel.CarrySource is not null) { _viewModel.CancelCarry(); _canvas.InvalidateSurface(); return true; }
@@ -3715,7 +3782,17 @@ public sealed class BoxBrowserPage : ContentPage, IPadHandler
             return;
         }
         if (wasSelected && _viewModel.BeginCarry())
+        {
             _canvas.InvalidateSurface();
+            return;
+        }
+        // Tapping a Pokemon auto-switches to the editor tab (mobile convenience).
+        if (_viewModel.Selected is { IsEmpty: false } && _activeTab != 1)
+        {
+            _activeTab = 1;
+            StyleTabs();
+            SwitchTab();
+        }
     }
 
     /// <summary>An empty slot is an invitation, not a dead cell: offer the ways to fill it.</summary>
