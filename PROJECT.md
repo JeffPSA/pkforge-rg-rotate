@@ -37,17 +37,23 @@ Touch-first, single-screen, tabbed UI. All core save-edit + bank functionality p
 - Box manage mode hides tabs
 
 ### M4: Editor Screens — DONE
-- Stats, moves, met origin editors → stacked collapsible sections
-- Larger touch targets for mobile
+- Kit primitives carry 44dp touch targets
+- StatsPopup → single-column rows
+- PokedexPicker → 3-column grid
+- BankEntryEditor → FlexLayout wrapping
+- PadMenu/PickerMenu → taller buttons
 
-### M5: Slide-Up Detail Panel
-- Inline summary replaces SecondScreenBoxPage
-- Tap Pokémon → slide-up panel with stats, sprite, legality
+### M5: Slide-Up Detail Panel — DONE
+- SecondScreenBoxPage → slide-up overlay (ContentPage → Grid)
+- Tap Pokémon → panel slides up with name, sprite, stats, types, legality
+- Scrim + drag handle + swipe-down dismiss
+- ISecondaryDisplayHost removed from MauiProgram.cs
 
-### M6: Polish
-- Font scaling at 720×720
+### M6: Polish — NEXT
+- Font scaling at 720×720 verification
 - Touch targets ≥44dp verification
 - Gamepad nav pass
+- Test on device, iterate
 
 ## Architecture (what to touch and what to leave alone)
 
