@@ -200,8 +200,5 @@ public sealed class MainActivity : MauiAppCompatActivity
         catch { }
     }
 }
-
-/// <summary>
-/// (Removed) AndroidPresentation-based second display host.
-/// The RG Rotate is single-screen; SecondScreenBoxPage is now a slide-up overlay panel.
-/// </summary>
+// (Removed) AndroidPresentation-based second display host.
+// The RG Rotate is single-screen; SecondScreenBoxPage is now a slide-up overlay panel.
